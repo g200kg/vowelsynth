@@ -1,0 +1,208 @@
+<!doctype html>
+<meta charset="UTF-8">
+<html>
+<head>
+<script src="bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
+<link rel="import" href="bower_components/polymer/polymer.html">
+<link rel="import" href="bower_components/webaudio-controls/webaudio-controls.html" >
+<style>
+canvas {
+  border: 8px solid #222;
+  border-radius: 8px;
+}
+td {
+  text-align: center;
+}
+</style>
+<script>
+  var fPot=[0.5,0.5,0,0,0,0];
+  var press=0;
+  var mousex=128,mousey=128;
+  var actx;
+  var wavdat=new Uint8Array(256);
+
+  function VowelOsc(actx){
+    this.connect=function(out){
+      this.out.connect(out);
+    };
+    this.SetFreq=function(f){
+      this.osc.frequency.value=f;
+    };
+    this.SetFormant=function(f1,f2){
+      this.fil1.frequency.value=f1*300*(f2+1)+300;
+      this.fil2.frequency.value=500+2500*f2*(1-0.8*f1);
+    };
+    this.SetVibRate=function(v){
+      this.lfo.frequency.value=v*9+1;
+    };
+    this.SetVibDepth=function(v){
+      this.lfodepth.gain.value=v*100;
+    };
+    this.Process=function(ev){
+      var inbuf = ev.inputBuffer.getChannelData(0);
+      var outbuf = ev.outputBuffer.getChannelData(0);
+      var d=0;
+      for(var i = 0; i < 1024; ++i){
+        var r=Math.abs(inbuf[i]);
+        if(r>this.limmax)
+          this.limmax=r;
+        else
+          this.limmax*=.999;
+        outbuf[i]=inbuf[i]/this.limmax;
+      }
+    }
+    this.osc=actx.createOscillator();
+    this.lfo=actx.createOscillator();
+    this.lfodepth=actx.createGain();
+    this.fil1=actx.createBiquadFilter();
+    this.fil2=actx.createBiquadFilter();
+    this.out=actx.createScriptProcessor(1024,1,1);
+    this.out.onaudioprocess=this.Process;
+    this.out.limmax=0;
+    this.lfo.frequency.value=5;
+    this.lfodepth.gain.value=100;
+    var wavImag=new Float32Array(300);
+    var wavReal=new Float32Array(300);
+    for(var i=0;i<300;++i){
+      wavReal[i]=1;
+      wavImag[i]=0;
+    }
+    this.osc.setPeriodicWave(actx.createPeriodicWave(wavReal,wavImag));
+    this.osc.start();
+    this.lfo.connect(this.lfodepth);
+    this.lfodepth.connect(this.osc.detune);
+    this.lfo.start();
+    this.fil1.type="bandpass";
+    this.fil2.type="bandpass";
+    this.fil1.Q.value=15;
+    this.fil2.Q.value=15;
+    this.osc.connect(this.fil1);
+    this.fil1.connect(this.fil2);
+    this.fil2.connect(this.out);
+  }
+
+  function Init(){
+    actx=new AudioContext();
+    vowel=new VowelOsc(actx);
+    vol=actx.createGain();
+    ana=actx.createAnalyser();
+    vowel.connect(vol);
+    vol.connect(ana);
+    vol.connect(actx.destination);
+    cv=document.getElementById("xy");
+    ctx=cv.getContext("2d");
+    ctx.fillRect(0,0,256,256);
+    cv.addEventListener("mousedown",MouseDown);
+    document.addEventListener("mousemove",MouseMove);
+    document.addEventListener("mouseup",MouseUp);
+    Update();
+    setInterval(DrawGraph,100);
+  }
+  function DrawGraph(){
+    ana.getByteFrequencyData(wavdat);
+    ctx.fillStyle="#4b4";
+    ctx.fillRect(0,0,256,256);
+    ctx.fillStyle="#ee0";
+    for(var i=0;i<256;++i){
+      ctx.fillRect(i,255-wavdat[i],1,wavdat[i]);
+    }
+    ctx.strokeStyle="#000";
+    ctx.lineWidth=4;
+    ctx.lineJoin="round";
+    ctx.lineCap="round";
+    ctx.beginPath();
+    var pm=200-fPot[2]*10;
+    ctx.moveTo(128,pm-fPot[0]*30);
+    ctx.bezierCurveTo(128,pm-fPot[0]*30,128+fPot[1]*64,pm-fPot[0]*50,128+fPot[1]*64,pm);
+    ctx.bezierCurveTo(128+fPot[1]*64,pm+10,128+30*fPot[0],pm+fPot[0]*30,128,pm+fPot[0]*30);
+    ctx.bezierCurveTo(128-30*fPot[0],pm+fPot[0]*30,128-fPot[1]*64,pm+10,128-fPot[1]*64,pm);
+    ctx.bezierCurveTo(128-fPot[1]*64,pm-fPot[0]*50,128,pm-fPot[0]*30,128,pm-fPot[0]*30);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(128+40,120,22,0,2*Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(128-40,120,22,0,2*Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(128+20,75+fPot[0]*10);
+    ctx.bezierCurveTo(128+20,90-fPot[0]*20,128+70,90-fPot[0]*20,128+70,85);
+    ctx.moveTo(128-20,75+fPot[0]*10);
+    ctx.bezierCurveTo(128-20,90-fPot[0]*20,128-70,90-fPot[0]*20,128-70,85);
+    ctx.stroke();
+    ctx.fillStyle="#000";
+    ctx.beginPath();
+    var py=120+(mousey-128)*.1;
+    ctx.arc(128+40+(mousex-128-40)*.1,py,8,0,2*Math.PI);
+    ctx.arc(128-40+(mousex-128+40)*.1,py,8,0,2*Math.PI);
+    ctx.fill();
+    ctx.strokeStyle="#f22";
+    ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.arc(mousex,mousey,16,0,Math.PI*2,true);
+    ctx.stroke();
+  }
+  function SetParam(c,v){
+    fPot[c]=parseFloat(v);
+    Update();
+  }
+  function Update(){
+    if(!actx)
+      return;
+    vowel.SetFreq(Math.pow(8,fPot[2])*55);
+    vowel.SetFormant(fPot[0],fPot[1]);
+    vol.gain.value=fPot[3];
+    vowel.SetVibDepth(fPot[4]);
+    vowel.SetVibRate(fPot[5]);
+  }
+  function MouseDown(e){
+    console.log("down");
+    press=1;
+  }
+  function MouseMove(e){
+    if(press){
+      var r=e.target.getBoundingClientRect();
+      mousex=(e.clientX-r.left)|0;
+      mousey=(e.clientY-r.top)|0;
+      if(mousex>255) mousex=255;
+      if(mousex<0) mousex=0;
+      if(mousey>255) mousey=255;
+      if(mousey<0) mousey=0;
+      SetParam(0,mousex/255);
+      SetParam(1,(255-mousey)/255);
+      DrawGraph();
+    }
+  }
+  function MouseUp(e){
+    console.log("up");
+    press=0;
+  }
+  window.onload=Init;
+</script>
+</head>
+<body>
+  <h1>VowelSynth</h1>
+<div>
+  <canvas width="256" height="256" id="xy"></canvas><br/><br/>
+  <table>
+    <tr>
+      <td><webaudio-knob id="pitch" min="0" max="1" value="0.1" step="0.001" onchange="SetParam(2,this.value)"></webaudio-knob></td>
+      <td><webaudio-knob id="vol" min="0" max="1" value="0.2" step="0.001" onchange="SetParam(3,this.value)"></webaudio-knob></td>
+      <td><webaudio-knob id="vibdepth" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(4,this.value)"></webaudio-knob></td>
+      <td><webaudio-knob id="vibrate" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(5,this.value)"></webaudio-knob></td>
+    </tr>
+    <tr>
+      <td>Freq</td>
+      <td>Vol</td>
+      <td>VibDepth</td>
+      <td>VibRate</td>
+    </tr>
+  </table>
+</div>
+<br/>
+<div>
+  Source code is available at : <br/>
+  <a href="https://github.com/g200kg/vowelsynth">https://github.com/g200kg/vowelsynth</a>
+</div>
+</body>
+</html>
