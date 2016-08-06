@@ -6,6 +6,12 @@
 <link rel="import" href="bower_components/polymer/polymer.html">
 <link rel="import" href="bower_components/webaudio-controls/webaudio-controls.html" >
 <style>
+table {
+  margin:auto;
+}
+h1 {
+  text-align: center;
+}
 canvas {
   border: 8px solid #222;
   border-radius: 8px;
@@ -15,7 +21,7 @@ td {
 }
 </style>
 <script>
-  var fPot=[0.5,0.5,0,0,0,0];
+  var fPot=[0.5,0.5,0,0,0,0,0];
   var mousedown=0;
   var keydown=0;
   var mousex=128,mousey=128;
@@ -25,7 +31,8 @@ td {
 
   function VowelOsc(actx){
     this.connect=function(out){
-      this.out.connect(out);
+      this.vol.connect(out);
+      this.delaylev.connect(out);
     };
     this.SetFreq=function(f){
       this.osc.frequency.value=f;
@@ -40,7 +47,13 @@ td {
     this.SetVibDepth=function(v){
       this.lfodepth.gain.value=v*100;
     };
-    this.Process=function(ev){
+    this.SetVol=function(v){
+      this.vol.gain.value=v;
+    };
+    this.SetDelayLevel=function(v){
+      this.delaylev.gain.value=v;
+    }
+    this.ProcessLimit=function(ev){
       var inbuf = ev.inputBuffer.getChannelData(0);
       var outbuf = ev.outputBuffer.getChannelData(0);
       var d=0;
@@ -58,9 +71,14 @@ td {
     this.lfodepth=actx.createGain();
     this.fil1=actx.createBiquadFilter();
     this.fil2=actx.createBiquadFilter();
-    this.out=actx.createScriptProcessor(1024,1,1);
-    this.out.onaudioprocess=this.Process;
-    this.out.limmax=0;
+    this.lim=actx.createScriptProcessor(1024,1,1);
+    this.vol=actx.createGain();
+    this.delay=actx.createDelay();
+    this.delaylev=actx.createGain();
+    this.lim.onaudioprocess=this.ProcessLimit;
+    this.lim.limmax=0;
+    this.delay.delayTime.value=0.2;
+    this.delaylev.gain.value=0.5;
     this.lfo.frequency.value=5;
     this.lfodepth.gain.value=100;
     var wavImag=new Float32Array(300);
@@ -80,25 +98,19 @@ td {
     this.fil2.Q.value=15;
     this.osc.connect(this.fil1);
     this.fil1.connect(this.fil2);
-    this.fil2.connect(this.out);
+    this.fil2.connect(this.lim);
+    this.lim.connect(this.vol);
+    this.vol.connect(this.delaylev);
+    this.delaylev.connect(this.delay);
+    this.delay.connect(this.delaylev);
   }
 
   function Init(){
     actx=new AudioContext();
     vowel=new VowelOsc(actx);
-    vol=actx.createGain();
-    delay=actx.createDelay();
-    delay.delayTime.value=0.2;
-    delaylev=actx.createGain();
-    delaylev.gain.value=0.5;
     ana=actx.createAnalyser();
-    vowel.connect(vol);
-    vol.connect(ana);
-    vol.connect(delaylev);
-    delaylev.connect(delay);
-    delay.connect(delaylev);
-    delaylev.connect(actx.destination);
-    vol.connect(actx.destination);
+    vowel.connect(ana);
+    vowel.connect(actx.destination);
     cv=document.getElementById("xy");
     ctx=cv.getContext("2d");
     ctx.fillRect(0,0,256,256);
@@ -164,9 +176,10 @@ td {
       return;
     vowel.SetFreq(Math.pow(8,fPot[2])*55);
     vowel.SetFormant(fPot[0],fPot[1]);
-    vol.gain.value=fPot[3]*(mousedown|keydown);
+    vowel.SetVol(fPot[3]*(mousedown|keydown));
     vowel.SetVibDepth(fPot[4]);
     vowel.SetVibRate(fPot[5]);
+    vowel.SetDelayLevel(fPot[6]);
   }
   function KeyDown(e){
     if(e.keyCode==32)
@@ -204,23 +217,32 @@ td {
 </script>
 </head>
 <body>
-  <h1>VowelSynth</h1>
 <div>
-  <canvas width="256" height="256" id="xy"></canvas><br/><br/>
   <table>
+    <tr>
+      <td colspan="5"><h1>VowelSynth</h1></td>
+    </tr>
+    <tr>
+      <td colspan="5">
+        <canvas width="256" height="256" id="xy"></canvas><br/><br/>
+      </td>
+    </tr>
     <tr>
       <td><webaudio-knob id="pitch" min="0" max="1" value="0.1" step="0.001" onchange="SetParam(2,this.value)"></webaudio-knob></td>
       <td><webaudio-knob id="vol" min="0" max="1" value="0.2" step="0.001" onchange="SetParam(3,this.value)"></webaudio-knob></td>
       <td><webaudio-knob id="vibdepth" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(4,this.value)"></webaudio-knob></td>
       <td><webaudio-knob id="vibrate" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(5,this.value)"></webaudio-knob></td>
+      <td><webaudio-knob id="delaylev" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(6,this.value)"></webaudio-knob></td>
     </tr>
     <tr>
       <td>Freq</td>
       <td>Vol</td>
       <td>VibDepth</td>
       <td>VibRate</td>
+      <td>Delay</td>
     </tr>
   </table>
+  <hr/>
 </div>
 <br/>
 <div>
