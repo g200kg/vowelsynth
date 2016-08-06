@@ -194,6 +194,7 @@ td {
   function MouseDown(e){
     mousedown=1;
     MouseMove(e);
+    e.preventDefault();
   }
   function MouseUp(e){
     mousedown=0;
