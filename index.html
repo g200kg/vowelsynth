@@ -202,9 +202,9 @@ td {
   }
   function MouseMove(e){
     if(mousedown){
-      var r=e.target.getBoundingClientRect();
-      mousex=(e.clientX-r.left)|0;
-      mousey=(e.clientY-r.top)|0;
+      var r=cv.getBoundingClientRect();
+      mousex=(e.clientX-r.left);
+      mousey=(e.clientY-r.top);
       if(mousex>255) mousex=255;
       if(mousex<0) mousex=0;
       if(mousey>255) mousey=255;
