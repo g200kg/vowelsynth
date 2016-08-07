@@ -6,6 +6,24 @@
 <link rel="import" href="bower_components/polymer/polymer.html">
 <link rel="import" href="bower_components/webaudio-controls/webaudio-controls.html" >
 <style>
+#base {
+  position:relative;
+}
+#splash {
+  position:absolute;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:#fff;
+}
+#ok{
+  position:absolute;
+  top:40%;
+  left:35%;
+  width:30%;
+  height:20%;
+}
 table {
   margin:auto;
 }
@@ -22,9 +40,9 @@ td {
 </style>
 <script>
   var fPot=[0.5,0.5,0,0,0,0,0];
-  var mousedown=0;
+  var pointerdown=0;
   var keydown=0;
-  var mousex=128,mousey=128;
+  var pointerx=128,pointery=128;
   var actx;
   var zz=1;
   var wavdat=new Uint8Array(256);
@@ -106,7 +124,8 @@ td {
   }
 
   function Init(){
-    actx=new AudioContext();
+    window.AudioContext = window.AudioContext||window.webkitAudioContext;
+    actx=new window.AudioContext();
     vowel=new VowelOsc(actx);
     ana=actx.createAnalyser();
     vowel.connect(ana);
@@ -114,9 +133,12 @@ td {
     cv=document.getElementById("xy");
     ctx=cv.getContext("2d");
     ctx.fillRect(0,0,256,256);
-    cv.addEventListener("mousedown",MouseDown);
-    document.addEventListener("mousemove",MouseMove);
-    document.addEventListener("mouseup",MouseUp);
+    cv.addEventListener("mousedown",PointerDown);
+    cv.addEventListener("touchstart",PointerDown);
+    document.addEventListener("mousemove",PointerMove);
+    document.addEventListener("touchmove",PointerMove);
+    document.addEventListener("mouseup",PointerUp);
+    document.addEventListener("touchend",PointerUp);
     document.addEventListener("keydown",KeyDown);
     document.addEventListener("keyup",KeyUp);
     Update();
@@ -134,7 +156,7 @@ td {
     ctx.lineWidth=4;
     ctx.lineJoin="round";
     ctx.lineCap="round";
-    zz=zz+((mousedown|keydown)-zz)*.5;
+    zz=zz+((pointerdown|keydown)-zz)*.5;
     ctx.beginPath();
     var pm=200-fPot[2]*10;
     ctx.moveTo(128,pm-fPot[0]*30*zz);
@@ -157,14 +179,14 @@ td {
     ctx.stroke();
     ctx.fillStyle="#000";
     ctx.beginPath();
-    var py=120+(mousey-128)*.1;
-    ctx.arc(128+40+(mousex-128-40)*.1,py,8,0,2*Math.PI);
-    ctx.arc(128-40+(mousex-128+40)*.1,py,8,0,2*Math.PI);
+    var py=120+(pointery-128)*.1;
+    ctx.arc(128+40+(pointerx-128-40)*.1,py,8,0,2*Math.PI);
+    ctx.arc(128-40+(pointerx-128+40)*.1,py,8,0,2*Math.PI);
     ctx.fill();
     ctx.strokeStyle="#f22";
     ctx.lineWidth=4;
     ctx.beginPath();
-    ctx.arc(mousex,mousey,16,0,Math.PI*2,true);
+    ctx.arc(pointerx,pointery,16,0,Math.PI*2,true);
     ctx.stroke();
   }
   function SetParam(c,v){
@@ -176,7 +198,7 @@ td {
       return;
     vowel.SetFreq(Math.pow(8,fPot[2])*55);
     vowel.SetFormant(fPot[0],fPot[1]);
-    vowel.SetVol(fPot[3]*(mousedown|keydown));
+    vowel.SetVol(fPot[3]*(pointerdown|keydown));
     vowel.SetVibDepth(fPot[4]);
     vowel.SetVibRate(fPot[5]);
     vowel.SetDelayLevel(fPot[6]);
@@ -191,66 +213,86 @@ td {
       keydown=0;
     Update();
   }
-  function MouseDown(e){
-    mousedown=1;
-    MouseMove(e);
+  function PointerDown(e){
+    pointerdown=1;
+    PointerMove(e);
     e.preventDefault();
   }
-  function MouseUp(e){
-    mousedown=0;
+  function PointerUp(e){
+    pointerdown=0;
     Update();
   }
-  function MouseMove(e){
-    if(mousedown){
+  function PointerMove(e){
+    if(pointerdown){
       var r=cv.getBoundingClientRect();
-      mousex=(e.clientX-r.left);
-      mousey=(e.clientY-r.top);
-      if(mousex>255) mousex=255;
-      if(mousex<0) mousex=0;
-      if(mousey>255) mousey=255;
-      if(mousey<0) mousey=0;
-      SetParam(0,mousex/255);
-      SetParam(1,(255-mousey)/255);
+      if(e.touches){
+        pointerx=e.touches[0].pageX-r.left;
+        pointery=e.touches[0].pageY-r.top;
+      }
+      else{
+        pointerx=(e.clientX-r.left);
+        pointery=(e.clientY-r.top);
+      }
+      if(pointerx>255) pointerx=255;
+      if(pointerx<0) pointerx=0;
+      if(pointery>255) pointery=255;
+      if(pointery<0) pointery=0;
+      SetParam(0,pointerx/255);
+      SetParam(1,(255-pointery)/255);
       DrawGraph();
     }
   }
-  window.onload=Init;
+  function Start(){
+    document.getElementById("splash").style.display="none";
+    Init();
+  }
+  window.onload=function(){
+    if(typeof(window.ontouchstart)=="undefined")
+      Start();
+  }
 </script>
 </head>
 <body>
-<div>
-  <table>
-    <tr>
-      <td colspan="5"><h1>VowelSynth</h1></td>
-    </tr>
-    <tr>
-      <td colspan="5">
-        <canvas width="256" height="256" id="xy"></canvas><br/><br/>
-      </td>
-    </tr>
-    <tr>
-      <td><webaudio-knob id="pitch" min="0" max="1" value="0.1" step="0.001" onchange="SetParam(2,this.value)"></webaudio-knob></td>
-      <td><webaudio-knob id="vol" min="0" max="1" value="0.2" step="0.001" onchange="SetParam(3,this.value)"></webaudio-knob></td>
-      <td><webaudio-knob id="vibdepth" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(4,this.value)"></webaudio-knob></td>
-      <td><webaudio-knob id="vibrate" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(5,this.value)"></webaudio-knob></td>
-      <td><webaudio-knob id="delaylev" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(6,this.value)"></webaudio-knob></td>
-    </tr>
-    <tr>
-      <td>Freq</td>
-      <td>Vol</td>
-      <td>VibDepth</td>
-      <td>VibRate</td>
-      <td>Delay</td>
-    </tr>
-  </table>
-  <hr/>
+<div id="base">
+  <div>
+    <table>
+      <tr>
+        <td colspan="5"><h1>VowelSynth</h1></td>
+      </tr>
+      <tr>
+        <td colspan="5">
+          <canvas width="256" height="256" id="xy"></canvas><br/><br/>
+        </td>
+      </tr>
+      <tr>
+        <td><webaudio-knob id="pitch" min="0" max="1" value="0.1" step="0.001" onchange="SetParam(2,this.value)"></webaudio-knob></td>
+        <td><webaudio-knob id="vol" min="0" max="1" value="0.2" step="0.001" onchange="SetParam(3,this.value)"></webaudio-knob></td>
+        <td><webaudio-knob id="vibdepth" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(4,this.value)"></webaudio-knob></td>
+        <td><webaudio-knob id="vibrate" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(5,this.value)"></webaudio-knob></td>
+        <td><webaudio-knob id="delaylev" min="0" max="1" value="0.5" step="0.001" onchange="SetParam(6,this.value)"></webaudio-knob></td>
+      </tr>
+      <tr>
+        <td>Freq</td>
+        <td>Vol</td>
+        <td>VibDepth</td>
+        <td>VibRate</td>
+        <td>Delay</td>
+      </tr>
+    </table>
+    <hr/>
+  </div>
+  <br/>
+  <div>
+    <b>Pointer drag in the square area or press SPACE to generate voice.</b>
+    <br/>
+    Now support mobile browsers.
+    <br/><br/>
+    Source code is available at : <br/>
+    <a href="https://github.com/g200kg/vowelsynth">https://github.com/g200kg/vowelsynth</a>
+  </div>
 </div>
-<br/>
-<div>
-  <b>Mouse Drag in the square area or press SPACE to generate voice.</b>
-  <br/><br/>
-  Source code is available at : <br/>
-  <a href="https://github.com/g200kg/vowelsynth">https://github.com/g200kg/vowelsynth</a>
+<div id="splash">
+  <button id="ok" onclick="Start()">Vowel Synth<br/>g200kg</button>
 </div>
 </body>
 </html>
