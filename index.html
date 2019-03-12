@@ -214,6 +214,7 @@ td {
     Update();
   }
   function PointerDown(e){
+    actx.resume();
     pointerdown=1;
     PointerMove(e);
     e.preventDefault();
